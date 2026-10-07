@@ -124,7 +124,7 @@ curl "http://localhost:8080/api/v1/tasks?status=TODO&page=0&size=10&sort=dueDate
 
 | # | Feature | PR |
 |---|---------|----|
-| 1 | Task API | |
+| 1 | Task API | [#8](https://github.com/albinzdaniel-edstem/mock-exam/pull/8) |
 | 2 | URL shortener | |
 | 3 | Authentication and roles | |
 | 4 | Product catalog | |
