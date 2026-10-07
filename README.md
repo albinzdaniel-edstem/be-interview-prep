@@ -94,7 +94,7 @@ Base path: `/api/v1/tasks`
 | GET | `/api/v1/tasks` | List tasks, newest first. Optional `status`, `page`, `size`, `sort`. |
 | GET | `/api/v1/tasks/{id}` | Get one task. Returns 404 if it does not exist. |
 | PUT | `/api/v1/tasks/{id}` | Replace a task. Returns 404 if it does not exist. |
-| DELETE | `/api/v1/tasks/{id}` | Delete a task. Returns 404 if it does not exist. |
+| DELETE | `/api/v1/tasks/{id}` | Delete a task. Returns 204 with no content, or 404 if it does not exist. |
 
 Task fields:
 

@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -252,13 +253,12 @@ class TaskControllerTest {
   }
 
   @Test
-  void deleteConfirmsTheRemoval() throws Exception {
+  void deleteReturnsNoContent() throws Exception {
     UUID id = UUID.randomUUID();
 
     mvc.perform(delete(BASE_URL + "/" + id))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.success").value(true))
-        .andExpect(jsonPath("$.message").value("Task deleted"));
+        .andExpect(status().isNoContent())
+        .andExpect(content().string(""));
 
     verify(taskService).delete(id);
   }
