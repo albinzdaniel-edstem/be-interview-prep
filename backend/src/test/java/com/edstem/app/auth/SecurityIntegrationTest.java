@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -277,6 +278,71 @@ class SecurityIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.tokenType").value("Bearer"))
         .andExpect(jsonPath("$.data.expiresIn").value(900));
+  }
+
+  @Test
+  void anExpiredTokenOnLoginDoesNotStopTheUserFromLoggingInAgain() throws Exception {
+    String email = registerNew();
+    String expired = tokenWithExpiry(Instant.now().minus(Duration.ofMinutes(1)));
+
+    mvc.perform(
+            post("/api/v1/auth/login")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + expired)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(credentials(email, PASSWORD)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+  }
+
+  @Test
+  void anExpiredTokenOnRegisterDoesNotBlockSigningUp() throws Exception {
+    String expired = tokenWithExpiry(Instant.now().minus(Duration.ofMinutes(1)));
+
+    mvc.perform(
+            post("/api/v1/auth/register")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + expired)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(credentials(newEmail(), PASSWORD)))
+        .andExpect(status().isCreated());
+  }
+
+  @Test
+  void aBrokenTokenOnAShortLinkIsIgnored() throws Exception {
+    mvc.perform(get("/s/unknown1").header(HttpHeaders.AUTHORIZATION, "Bearer not-a-token"))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error.code").value("LINK_NOT_FOUND"));
+  }
+
+  @Test
+  void aBrokenTokenStillGets401OnAProtectedEndpoint() throws Exception {
+    mvc.perform(get("/api/v1/tasks").header(HttpHeaders.AUTHORIZATION, "Bearer not-a-token"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void aHeadRequestToAShortLinkNeedsNoLogin() throws Exception {
+    String token = login(registerNew());
+    mvc.perform(
+            post("/api/v1/links")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"url\":\"https://example.com/head-check\"}"))
+        .andExpect(status().isCreated());
+    String code =
+        linkRepository.findAll().stream()
+            .filter(link -> "https://example.com/head-check".equals(link.getOriginalUrl()))
+            .findFirst()
+            .orElseThrow()
+            .getCode();
+
+    mvc.perform(head("/s/" + code))
+        .andExpect(status().isFound())
+        .andExpect(header().string(HttpHeaders.LOCATION, "https://example.com/head-check"));
+    mvc.perform(head("/s/unknown1")).andExpect(status().isNotFound());
+
+    assertThat(linkRepository.findByCode(code).orElseThrow().getVisitCount()).isZero();
+    mvc.perform(get("/s/" + code)).andExpect(status().isFound());
+    assertThat(linkRepository.findByCode(code).orElseThrow().getVisitCount()).isEqualTo(1);
   }
 
   private String registerNew() throws Exception {

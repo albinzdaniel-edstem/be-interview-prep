@@ -184,6 +184,33 @@ class LinkServiceTest {
   }
 
   @Test
+  void resolveReturnsTheOriginalUrlWithoutCountingAVisit() {
+    Link link = link("abc12345", NOW.plusSeconds(60));
+    when(linkRepository.findByCode("abc12345")).thenReturn(Optional.of(link));
+
+    String target = linkService.resolve("abc12345");
+
+    assertThat(target).isEqualTo(URL);
+    verify(linkRepository, never()).incrementVisitCount(any());
+  }
+
+  @Test
+  void resolveRejectsAnUnknownCode() {
+    when(linkRepository.findByCode("nope")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> linkService.resolve("nope")).isInstanceOf(LinkNotFoundException.class);
+  }
+
+  @Test
+  void resolveRejectsAnExpiredCode() {
+    Link link = link("abc12345", NOW.minusSeconds(1));
+    when(linkRepository.findByCode("abc12345")).thenReturn(Optional.of(link));
+
+    assertThatThrownBy(() -> linkService.resolve("abc12345"))
+        .isInstanceOf(LinkExpiredException.class);
+  }
+
+  @Test
   void statsShowTheOriginalUrlVisitCountAndCreatedDate() {
     Link link = link("abc12345", null);
     link.setVisitCount(7);

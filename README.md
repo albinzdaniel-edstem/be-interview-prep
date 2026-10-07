@@ -137,6 +137,7 @@ Creating a link and reading its stats need a login. Opening a short link does no
 |---|---|---|
 | POST | `/api/v1/links` | Shorten a URL. Returns 201 for a new link, or 200 with the existing link if the URL was shortened before. |
 | GET | `/s/{code}` | Redirect to the original URL (302) and count the visit. Open to everyone, no login. Unknown code: 404. Expired code: 410. |
+| HEAD | `/s/{code}` | The same redirect headers, but the visit is **not** counted. Link checkers and preview bots send HEAD. |
 | GET | `/api/v1/links/{code}/stats` | Original URL, visit count, created date and expiry. Unknown code: 404. |
 
 ```bash
@@ -207,6 +208,9 @@ How it works, and why:
   `JWT_SECRET`. Spring's resource server checks the signature, the issuer and the expiry.
 - **Exactly 15 minutes.** Spring allows 60 seconds of clock skew by default. It is set to zero, so a
   token stops working 15 minutes after it was issued.
+- **Open endpoints ignore the token header.** Register, login and opening a short link skip the token
+  check. A client that still sends its old, expired token can log in again. A broken token on any
+  other endpoint still gives 401.
 - **Passwords** are hashed with BCrypt and never returned or logged. BCrypt reads only the first 72
   bytes, so longer passwords are rejected instead of being cut short without notice.
 - **Same answer for a wrong email and a wrong password.** The password is checked in both cases, so
