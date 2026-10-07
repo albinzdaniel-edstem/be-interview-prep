@@ -9,6 +9,11 @@ spring:
     hibernate:
       ddl-auto: none
     open-in-view: false
+  cache:
+    type: caffeine
+    cache-names: products
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=10m
   data:
     web:
       pageable:

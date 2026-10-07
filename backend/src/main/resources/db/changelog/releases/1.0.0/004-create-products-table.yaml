@@ -1,0 +1,68 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-create-products-table
+      author: app
+      changes:
+        - createTable:
+            tableName: products
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: varchar(200)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: price_cents
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: stock
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rating
+                  type: double
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE products ADD CONSTRAINT ck_products_price_non_negative CHECK (price_cents >= 0)
+        - sql:
+            sql: ALTER TABLE products ADD CONSTRAINT ck_products_stock_non_negative CHECK (stock >= 0)
+        - sql:
+            sql: ALTER TABLE products ADD CONSTRAINT ck_products_rating_range CHECK (rating >= 0 AND rating <= 5)
+        - createIndex:
+            tableName: products
+            indexName: idx_products_category
+            columns:
+              - column:
+                  name: category
+        - createIndex:
+            tableName: products
+            indexName: idx_products_price_cents
+            columns:
+              - column:
+                  name: price_cents
+        - createIndex:
+            tableName: products
+            indexName: idx_products_created_at
+            columns:
+              - column:
+                  name: created_at
