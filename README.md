@@ -26,6 +26,7 @@ Settings come from environment variables. Each one has a local default.
 | `DB_URL` | `jdbc:h2:mem:app;DB_CLOSE_DELAY=-1` | database address |
 | `DB_USERNAME` | `sa` | database user |
 | `DB_PASSWORD` | empty | database password |
+| `SHORT_LINK_BASE_URL` | `http://localhost:8080` | public address used to build short URLs |
 
 ## Run the tests
 
@@ -119,6 +120,39 @@ curl -X POST http://localhost:8080/api/v1/tasks \
 
 curl "http://localhost:8080/api/v1/tasks?status=TODO&page=0&size=10&sort=dueDate,asc"
 ```
+
+## URL shortener
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/v1/links` | Shorten a URL. Returns 201 for a new link, or 200 with the existing link if the URL was shortened before. |
+| GET | `/s/{code}` | Redirect to the original URL (302) and count the visit. Unknown code: 404. Expired code: 410. |
+| GET | `/api/v1/links/{code}/stats` | Original URL, visit count, created date and expiry. Unknown code: 404. |
+
+```bash
+curl -X POST http://localhost:8080/api/v1/links \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/some/long/path", "expiresAt": "2030-01-01T00:00:00Z"}'
+```
+
+`expiresAt` is optional and must be in the future. Only `http` and `https` URLs are accepted.
+
+How it behaves, and why:
+
+- **Short codes** are 8 random characters from `A-Z`, `a-z`, `0-9`. They come from `SecureRandom`, so
+  they cannot be guessed in order. The database has a unique constraint on the code. On a clash the
+  service tries a new code, up to 5 times.
+- **Same URL twice** returns the same link, so one URL has one code and one set of statistics. The
+  database enforces this with a unique constraint on a SHA-256 hash of the URL. If two requests
+  shorten the same new URL at the same moment, one insert wins and the other returns that link.
+  The expiry of the first request is kept. If that link has already expired, the new request
+  renews it: same code, new expiry, visit count kept.
+- **Visits** are counted with one SQL statement, `visit_count = visit_count + 1`. The database does the
+  increment, so two visitors at the same moment cannot overwrite each other's count. A test opens one
+  link from 50 threads at once and expects exactly 50 visits.
+- **The redirect is a 302, not a 301**, with `Cache-Control: no-store`. A browser caches a 301 and
+  would skip the service on later visits, so those visits would not be counted.
+- **The visit path is `/s/{code}`**, outside `/api/v1`, so that the short URL stays short.
 
 ## Features
 
