@@ -20,6 +20,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -59,6 +61,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         "Validation failed",
         request.getRequestURI(),
         fieldErrors);
+  }
+
+  @ExceptionHandler(AuthenticationException.class)
+  public ResponseEntity<Object> handleAuthentication(
+      AuthenticationException ex, HttpServletRequest request) {
+    return build(
+        HttpStatus.UNAUTHORIZED,
+        CommonErrorCode.UNAUTHENTICATED.getCode(),
+        "Authentication is required to access this resource",
+        request.getRequestURI(),
+        null);
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<Object> handleAccessDenied(
+      AccessDeniedException ex, HttpServletRequest request) {
+    return build(
+        HttpStatus.FORBIDDEN,
+        CommonErrorCode.ACCESS_DENIED.getCode(),
+        "You do not have permission to access this resource",
+        request.getRequestURI(),
+        null);
   }
 
   @ExceptionHandler(Exception.class)
