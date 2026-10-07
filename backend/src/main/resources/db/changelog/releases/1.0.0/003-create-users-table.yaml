@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-users-table
+      author: app
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: email
+                  type: varchar(254)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_users_email
+              - column:
+                  name: password_hash
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: role
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
