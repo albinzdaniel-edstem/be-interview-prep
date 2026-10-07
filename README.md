@@ -158,7 +158,7 @@ How it behaves, and why:
 
 | # | Feature | PR |
 |---|---------|----|
-| 1 | Task API | [#8](https://github.com/albinzdaniel-edstem/mock-exam/pull/8) |
+| 1 | Task API | [#8](../../pull/8) |
 | 2 | URL shortener | |
 | 3 | Authentication and roles | |
 | 4 | Product catalog | |
