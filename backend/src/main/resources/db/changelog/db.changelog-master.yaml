@@ -5,3 +5,5 @@ databaseChangeLog:
       file: db/changelog/releases/1.0.0/002-create-links-table.yaml
   - include:
       file: db/changelog/releases/1.0.0/003-create-users-table.yaml
+  - include:
+      file: db/changelog/releases/1.0.0/004-create-products-table.yaml
