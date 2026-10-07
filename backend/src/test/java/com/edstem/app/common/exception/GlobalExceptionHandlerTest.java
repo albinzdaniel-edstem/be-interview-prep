@@ -12,10 +12,13 @@ import com.edstem.app.common.dto.response.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.mapping.PropertyReferenceException;
+import org.springframework.data.util.TypeInformation;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -68,6 +71,39 @@ class GlobalExceptionHandlerTest {
   }
 
   @Test
+  void wrongNumberInBodyReturnsFieldError() throws Exception {
+    String body = "{\"name\":\"a\",\"count\":\"abc\"}";
+
+    mvc.perform(post("/probe/body").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.error.fieldErrors", hasSize(1)))
+        .andExpect(jsonPath("$.error.fieldErrors[0].field").value("count"))
+        .andExpect(jsonPath("$.error.fieldErrors[0].message").value("Invalid value 'abc'"));
+  }
+
+  @Test
+  void unknownEnumValueInBodyListsAllowedValues() throws Exception {
+    String body = "{\"name\":\"a\",\"count\":1,\"level\":\"HUGE\"}";
+
+    mvc.perform(post("/probe/body").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+        .andExpect(jsonPath("$.error.fieldErrors[0].field").value("level"))
+        .andExpect(
+            jsonPath("$.error.fieldErrors[0].message")
+                .value("Invalid value 'HUGE'. Allowed values: LOW, HIGH"));
+  }
+
+  @Test
+  void unknownSortPropertyReturnsInvalidParameter() throws Exception {
+    mvc.perform(get("/probe/sort"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error.code").value("INVALID_PARAMETER"))
+        .andExpect(jsonPath("$.message").value("Cannot sort by 'bogus'"));
+  }
+
+  @Test
   void wrongParameterTypeReturnsInvalidParameter() throws Exception {
     mvc.perform(get("/probe/number").param("value", "abc"))
         .andExpect(status().isBadRequest())
@@ -98,6 +134,7 @@ class GlobalExceptionHandlerTest {
     mvc.perform(get("/does-not-exist"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.success").value(false))
+        .andExpect(jsonPath("$.message").value("Resource not found"))
         .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"))
         .andExpect(jsonPath("$.error.status").value(404));
   }
@@ -106,6 +143,7 @@ class GlobalExceptionHandlerTest {
   void wrongMethodReturnsMethodNotAllowed() throws Exception {
     mvc.perform(get("/probe/body"))
         .andExpect(status().isMethodNotAllowed())
+        .andExpect(jsonPath("$.message").value(containsString("not supported")))
         .andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"))
         .andExpect(jsonPath("$.error.status").value(405));
   }
@@ -160,7 +198,12 @@ class GlobalExceptionHandlerTest {
     }
   }
 
-  record Payload(@NotBlank String name, @Min(1) int count) {}
+  enum Level {
+    LOW,
+    HIGH
+  }
+
+  record Payload(@NotBlank String name, @Min(1) int count, Level level) {}
 
   @RestController
   @RequestMapping("/probe")
@@ -179,6 +222,11 @@ class GlobalExceptionHandlerTest {
     @GetMapping("/min")
     ApiResponse<Integer> min(@RequestParam @Min(1) int value) {
       return ApiResponse.ok(value);
+    }
+
+    @GetMapping("/sort")
+    ApiResponse<Void> sort() {
+      throw new PropertyReferenceException("bogus", TypeInformation.of(String.class), List.of());
     }
 
     @GetMapping("/domain")

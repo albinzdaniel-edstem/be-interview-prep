@@ -9,6 +9,10 @@ spring:
     hibernate:
       ddl-auto: none
     open-in-view: false
+  data:
+    web:
+      pageable:
+        max-page-size: 100
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
   jackson:

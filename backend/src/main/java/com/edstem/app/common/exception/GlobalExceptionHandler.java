@@ -3,19 +3,25 @@ package com.edstem.app.common.exception;
 import com.edstem.app.common.dto.response.ApiResponse;
 import com.edstem.app.common.dto.response.ErrorDetail;
 import com.edstem.app.common.dto.response.FieldErrorDetail;
+import com.fasterxml.jackson.databind.JsonMappingException.Reference;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -115,12 +121,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         fieldErrors);
   }
 
+  @ExceptionHandler(PropertyReferenceException.class)
+  public ResponseEntity<Object> handleUnknownSortProperty(
+      PropertyReferenceException ex, HttpServletRequest request) {
+    return build(
+        HttpStatus.BAD_REQUEST,
+        CommonErrorCode.INVALID_PARAMETER.getCode(),
+        "Cannot sort by '%s'".formatted(ex.getPropertyName()),
+        request.getRequestURI(),
+        null);
+  }
+
   @Override
   protected ResponseEntity<Object> handleHttpMessageNotReadable(
       HttpMessageNotReadableException ex,
       HttpHeaders headers,
       HttpStatusCode status,
       WebRequest request) {
+    if (ex.getCause() instanceof InvalidFormatException invalid) {
+      return build(
+          HttpStatus.BAD_REQUEST,
+          CommonErrorCode.VALIDATION_FAILED.getCode(),
+          "Validation failed",
+          path(request),
+          List.of(new FieldErrorDetail(fieldName(invalid), invalidValueMessage(invalid))));
+    }
     return build(
         HttpStatus.BAD_REQUEST,
         CommonErrorCode.MALFORMED_REQUEST.getCode(),
@@ -149,10 +174,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       HttpHeaders headers,
       HttpStatusCode statusCode,
       WebRequest request) {
-    String message =
-        body instanceof ProblemDetail problem && problem.getDetail() != null
-            ? problem.getDetail()
-            : "Request could not be processed";
+    String message = "Request could not be processed";
+    if (ex instanceof ErrorResponse errorResponse && errorResponse.getBody().getDetail() != null) {
+      message = errorResponse.getBody().getDetail();
+    }
+    if (statusCode.value() == HttpStatus.NOT_FOUND.value()) {
+      message = "Resource not found";
+    }
     if (statusCode.is5xxServerError()) {
       log.error("Request failed on {}", path(request), ex);
       message = "Something went wrong. Please try again later.";
@@ -172,6 +200,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
               ? CommonErrorCode.INTERNAL_ERROR
               : CommonErrorCode.REQUEST_REJECTED;
     };
+  }
+
+  private static String fieldName(InvalidFormatException ex) {
+    String name =
+        ex.getPath().stream()
+            .map(Reference::getFieldName)
+            .filter(Objects::nonNull)
+            .collect(Collectors.joining("."));
+    return name.isEmpty() ? "body" : name;
+  }
+
+  private static String invalidValueMessage(InvalidFormatException ex) {
+    Class<?> target = ex.getTargetType();
+    if (target != null && target.isEnum()) {
+      String allowed =
+          Arrays.stream(target.getEnumConstants())
+              .map(Object::toString)
+              .collect(Collectors.joining(", "));
+      return "Invalid value '%s'. Allowed values: %s".formatted(ex.getValue(), allowed);
+    }
+    return "Invalid value '%s'".formatted(ex.getValue());
   }
 
   private static String path(WebRequest request) {
