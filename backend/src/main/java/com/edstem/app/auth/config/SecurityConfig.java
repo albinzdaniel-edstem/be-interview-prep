@@ -5,6 +5,7 @@ import com.edstem.app.auth.security.JsonAccessDeniedHandler;
 import com.edstem.app.auth.security.JsonAuthenticationEntryPoint;
 import com.edstem.app.auth.service.TokenService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,6 +21,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(AdminProperties.class)
 @RequiredArgsConstructor
 public class SecurityConfig {
 
