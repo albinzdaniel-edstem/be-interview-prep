@@ -12,8 +12,6 @@ import com.edstem.app.product.repository.ProductSpecifications;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,19 +19,17 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductService {
 
-  public static final String CACHE_NAME = "products";
+  public static final String CACHE_NAME = ProductCache.NAME;
 
   private final ProductRepository productRepository;
   private final ProductMapper productMapper;
-  private final CacheManager cacheManager;
+  private final ProductCache productCache;
 
   @Transactional
   public ProductResponse create(ProductRequest request) {
@@ -66,7 +62,7 @@ public class ProductService {
     Product product = findOrThrow(id);
     productMapper.update(product, request);
     ProductResponse response = productMapper.toResponse(productRepository.saveAndFlush(product));
-    evictAfterCommit(id);
+    productCache.evictAfterCommit(id);
     log.info("Updated product {}", id);
     return response;
   }
@@ -74,32 +70,8 @@ public class ProductService {
   @Transactional
   public void delete(UUID id) {
     productRepository.delete(findOrThrow(id));
-    evictAfterCommit(id);
+    productCache.evictAfterCommit(id);
     log.info("Deleted product {}", id);
-  }
-
-  /**
-   * The cache entry is removed only after the database change is committed. If it were removed
-   * earlier, a reader could load the old row, put it back in the cache, and keep it there after the
-   * commit. An annotation such as @CacheEvict can run before or after the commit depending on how
-   * the proxies are ordered, so the timing is set here and does not depend on that.
-   */
-  private void evictAfterCommit(UUID id) {
-    Cache cache = cacheManager.getCache(CACHE_NAME);
-    if (cache == null) {
-      return;
-    }
-    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-      cache.evict(id);
-      return;
-    }
-    TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            cache.evict(id);
-          }
-        });
   }
 
   private static void checkPriceRange(ProductFilter filter) {

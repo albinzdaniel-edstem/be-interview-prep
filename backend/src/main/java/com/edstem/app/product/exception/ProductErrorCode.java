@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum ProductErrorCode implements ErrorCode {
   PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND),
-  INVALID_PRICE_RANGE(HttpStatus.BAD_REQUEST);
+  INVALID_PRICE_RANGE(HttpStatus.BAD_REQUEST),
+  INSUFFICIENT_STOCK(HttpStatus.CONFLICT);
 
   private final HttpStatus status;
 
