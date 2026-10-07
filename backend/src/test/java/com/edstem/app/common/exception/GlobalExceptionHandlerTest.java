@@ -134,6 +134,7 @@ class GlobalExceptionHandlerTest {
     mvc.perform(get("/does-not-exist"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.success").value(false))
+        .andExpect(jsonPath("$.message").value("Resource not found"))
         .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"))
         .andExpect(jsonPath("$.error.status").value(404));
   }
@@ -142,6 +143,7 @@ class GlobalExceptionHandlerTest {
   void wrongMethodReturnsMethodNotAllowed() throws Exception {
     mvc.perform(get("/probe/body"))
         .andExpect(status().isMethodNotAllowed())
+        .andExpect(jsonPath("$.message").value(containsString("not supported")))
         .andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"))
         .andExpect(jsonPath("$.error.status").value(405));
   }

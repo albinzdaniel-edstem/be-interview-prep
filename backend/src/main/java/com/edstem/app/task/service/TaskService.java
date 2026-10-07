@@ -26,7 +26,7 @@ public class TaskService {
 
   @Transactional
   public TaskResponse create(CreateTaskRequest request) {
-    Task saved = taskRepository.save(taskMapper.toEntity(request));
+    Task saved = taskRepository.saveAndFlush(taskMapper.toEntity(request));
     log.info("Created task {}", saved.getId());
     return taskMapper.toResponse(saved);
   }

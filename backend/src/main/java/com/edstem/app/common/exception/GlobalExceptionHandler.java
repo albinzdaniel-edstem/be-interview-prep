@@ -18,10 +18,10 @@ import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -174,10 +174,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
       HttpHeaders headers,
       HttpStatusCode statusCode,
       WebRequest request) {
-    String message =
-        body instanceof ProblemDetail problem && problem.getDetail() != null
-            ? problem.getDetail()
-            : "Request could not be processed";
+    String message = "Request could not be processed";
+    if (ex instanceof ErrorResponse errorResponse && errorResponse.getBody().getDetail() != null) {
+      message = errorResponse.getBody().getDetail();
+    }
+    if (statusCode.value() == HttpStatus.NOT_FOUND.value()) {
+      message = "Resource not found";
+    }
     if (statusCode.is5xxServerError()) {
       log.error("Request failed on {}", path(request), ex);
       message = "Something went wrong. Please try again later.";

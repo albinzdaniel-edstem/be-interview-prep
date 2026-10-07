@@ -41,7 +41,7 @@ class TaskServiceTest {
   void createDefaultsStatusToTodoAndTrimsTitle() {
     LocalDate due = LocalDate.now().plusDays(2);
     CreateTaskRequest request = new CreateTaskRequest("  Write report  ", "Quarterly", null, due);
-    when(taskRepository.save(any(Task.class))).thenAnswer(call -> call.getArgument(0));
+    when(taskRepository.saveAndFlush(any(Task.class))).thenAnswer(call -> call.getArgument(0));
 
     TaskResponse response = taskService.create(request);
 
@@ -53,7 +53,7 @@ class TaskServiceTest {
   @Test
   void createKeepsTheGivenStatus() {
     CreateTaskRequest request = new CreateTaskRequest("Review", null, TaskStatus.IN_PROGRESS, null);
-    when(taskRepository.save(any(Task.class))).thenAnswer(call -> call.getArgument(0));
+    when(taskRepository.saveAndFlush(any(Task.class))).thenAnswer(call -> call.getArgument(0));
 
     TaskResponse response = taskService.create(request);
 
