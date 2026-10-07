@@ -1,0 +1,47 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-create-links-table
+      author: app
+      changes:
+        - createTable:
+            tableName: links
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: code
+                  type: varchar(8)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_links_code
+              - column:
+                  name: original_url
+                  type: varchar(2048)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: url_hash
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_links_url_hash
+              - column:
+                  name: visit_count
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: timestamp with time zone
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
