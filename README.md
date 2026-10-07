@@ -6,7 +6,9 @@ A Spring Boot backend, built one feature at a time. Each feature has its own pul
 
 - Java 21 and Spring Boot 3.5
 - Maven (the wrapper is included, so Maven does not need to be installed)
-- H2 in-memory database for local runs and tests
+- H2 in-memory database for local runs and most tests. The PostgreSQL driver is included, so set
+  `DB_URL`, `DB_USERNAME` and `DB_PASSWORD` to run on PostgreSQL.
+- Testcontainers, to run the order tests on a real PostgreSQL
 - Liquibase for every database change
 - Caffeine for the in-memory product cache
 - Lombok
@@ -41,6 +43,9 @@ Settings come from environment variables. Only `JWT_SECRET` has no default.
 cd backend
 ./mvnw test
 ```
+
+**Docker must be running.** The order tests start a real PostgreSQL database in a container
+(`postgres:15-alpine`) and create the schema with the real Liquibase changesets. All other tests use H2.
 
 Format the code before you commit:
 
@@ -230,6 +235,58 @@ How it behaves, and why:
 - **Name search** uses `LIKE '%text%'`, which cannot use a normal index. It is fine for thousands of
   products. For millions, a PostgreSQL trigram or full-text index would be needed.
 
+## Order service
+
+Every endpoint needs a login (see Authentication). An order takes stock from products in the catalog.
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/v1/orders` | Place an order with one or more items. Returns 201, or 200 with the first order if it is a retry. |
+| POST | `/api/v1/orders/{id}/cancel` | Cancel your own order and give its stock back. |
+
+Placing an order needs an `Idempotency-Key` header. Use a new value (for example a UUID) for each
+new order, and send the **same** value again when you retry the same order.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/orders \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: 6f1c2d9e-3b7a-4c55-9a0e-1d2f3a4b5c6d" \
+  -H "Content-Type: application/json" \
+  -d '{"items": [{"productId": "<product id>", "quantity": 2}]}'
+```
+
+| Situation | Status | `error.code` |
+|---|---|---|
+| Not enough stock for any item | 409 | `INSUFFICIENT_STOCK` (the message names the product, the requested and the available amount) |
+| Unknown product | 404 | `PRODUCT_NOT_FOUND` |
+| Missing `Idempotency-Key`, no items, or a quantity below 1 | 400 | `MALFORMED_REQUEST` or `VALIDATION_FAILED` |
+| Cancelling an order that is not yours or does not exist | 404 | `ORDER_NOT_FOUND` |
+
+How it works, and why:
+
+- **Stock is never oversold.** Each item is reserved with one SQL statement:
+  `update products set stock = stock - :qty where id = :id and stock >= :qty`. The database checks
+  the stock and lowers it as one step and locks the row while it does. Two orders at the same moment
+  cannot both take the last item. If the statement changes no row, there is not enough stock. The
+  database also refuses a negative stock (`CHECK (stock >= 0)`) as a second safety net.
+- **All or nothing.** The order row and every stock change run in one transaction. If one item has too
+  little stock, the transaction is rolled back, and the items already reserved go back as well.
+- **No deadlocks.** Lines for the same product are added up and processed in product id order, so every
+  order locks product rows in the same order.
+- **How a retry is recognised.** The client sends an `Idempotency-Key` header. The database has a
+  unique constraint on (user, key). If an order for that pair exists, it is returned and nothing is
+  reserved again. The key is per user, so one user's key can never return another user's order. If two
+  identical requests arrive at the same moment, one insert wins and the other is rejected before it
+  touches the stock, and it returns the winner's order.
+- **Cancelling** changes the status with `update ... where status = 'PLACED'`. Only one of two cancel
+  requests at the same moment gets a row back, so the stock is returned once. Cancelling an order that
+  is already cancelled changes nothing and returns it.
+- **The product cache stays correct.** An order changes stock, so the cached product is removed after
+  the commit, the same way as for a product update.
+- **Orders keep only the product id.** There is no foreign key to the product, so deleting a product
+  never breaks an old order. If the product is gone when an order is cancelled, there is nothing to
+  give the stock back to, and a warning is logged.
+
 ## Authentication
 
 | Method | Path | Who | What it does |
@@ -295,7 +352,7 @@ How it works, and why:
 | 2 | URL shortener | [#9](../../pull/9) |
 | 3 | Authentication and roles | [#10](../../pull/10) |
 | 4 | Product catalog | [#11](../../pull/11) |
-| 5 | Order service | |
+| 5 | Order service | [#12](../../pull/12) |
 
 ## Not included
 

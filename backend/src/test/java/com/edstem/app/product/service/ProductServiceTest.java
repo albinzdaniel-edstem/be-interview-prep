@@ -47,7 +47,8 @@ class ProductServiceTest {
 
   @BeforeEach
   void setUp() {
-    productService = new ProductService(productRepository, new ProductMapper(), cacheManager);
+    productService =
+        new ProductService(productRepository, new ProductMapper(), new ProductCache(cacheManager));
     TransactionSynchronizationManager.initSynchronization();
   }
 

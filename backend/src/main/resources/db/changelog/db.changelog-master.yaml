@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/releases/1.0.0/003-create-users-table.yaml
   - include:
       file: db/changelog/releases/1.0.0/004-create-products-table.yaml
+  - include:
+      file: db/changelog/releases/1.0.0/005-create-orders-tables.yaml

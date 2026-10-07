@@ -1,4 +1,4 @@
-package com.edstem.app.product.exception;
+package com.edstem.app.order.exception;
 
 import com.edstem.app.common.exception.ErrorCode;
 import lombok.Getter;
@@ -7,10 +7,8 @@ import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
-public enum ProductErrorCode implements ErrorCode {
-  PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND),
-  INVALID_PRICE_RANGE(HttpStatus.BAD_REQUEST),
-  INSUFFICIENT_STOCK(HttpStatus.CONFLICT);
+public enum OrderErrorCode implements ErrorCode {
+  ORDER_NOT_FOUND(HttpStatus.NOT_FOUND);
 
   private final HttpStatus status;
 

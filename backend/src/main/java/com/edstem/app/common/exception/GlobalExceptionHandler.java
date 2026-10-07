@@ -23,6 +23,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -129,13 +130,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     List<FieldErrorDetail> fieldErrors =
         ex.getParameterValidationResults().stream()
             .flatMap(
-                result ->
-                    result.getResolvableErrors().stream()
+                result -> {
+                  if (result instanceof ParameterErrors bodyErrors) {
+                    return bodyErrors.getFieldErrors().stream()
                         .map(
                             error ->
-                                new FieldErrorDetail(
-                                    result.getMethodParameter().getParameterName(),
-                                    error.getDefaultMessage())))
+                                new FieldErrorDetail(error.getField(), error.getDefaultMessage()));
+                  }
+                  return result.getResolvableErrors().stream()
+                      .map(
+                          error ->
+                              new FieldErrorDetail(
+                                  result.getMethodParameter().getParameterName(),
+                                  error.getDefaultMessage()));
+                })
             .toList();
     return build(
         HttpStatus.BAD_REQUEST,
