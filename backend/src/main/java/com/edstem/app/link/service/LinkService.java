@@ -52,12 +52,15 @@ public class LinkService {
 
   @Transactional
   public String visit(String code) {
-    Link link = findByCode(code);
-    if (link.isExpiredAt(clock.instant())) {
-      throw new LinkExpiredException(code);
-    }
+    Link link = findActiveByCode(code);
     linkRepository.incrementVisitCount(link.getId());
     return link.getOriginalUrl();
+  }
+
+  /** Finds where a link goes without counting a visit. Used for HEAD requests. */
+  @Transactional(readOnly = true)
+  public String resolve(String code) {
+    return findActiveByCode(code).getOriginalUrl();
   }
 
   @Transactional(readOnly = true)
@@ -96,6 +99,14 @@ public class LinkService {
       }
     }
     throw new ShortCodeUnavailableException();
+  }
+
+  private Link findActiveByCode(String code) {
+    Link link = findByCode(code);
+    if (link.isExpiredAt(clock.instant())) {
+      throw new LinkExpiredException(code);
+    }
+    return link;
   }
 
   private Link findByCode(String code) {

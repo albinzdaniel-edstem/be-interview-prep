@@ -15,12 +15,15 @@ import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.data.util.TypeInformation;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(
     controllers = {
       GlobalExceptionHandlerTest.ProbeController.class,
@@ -168,6 +172,24 @@ class GlobalExceptionHandlerTest {
   }
 
   @Test
+  void accessDeniedReturns403WithoutTheInternalReason() throws Exception {
+    mvc.perform(get("/probe/denied"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error.code").value("ACCESS_DENIED"))
+        .andExpect(jsonPath("$.error.status").value(403))
+        .andExpect(jsonPath("$.message").value(not(containsString("secret reason"))));
+  }
+
+  @Test
+  void authenticationFailureReturns401WithoutTheInternalReason() throws Exception {
+    mvc.perform(get("/probe/unauthenticated"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.error.code").value("UNAUTHENTICATED"))
+        .andExpect(jsonPath("$.error.status").value(401))
+        .andExpect(jsonPath("$.message").value(not(containsString("secret reason"))));
+  }
+
+  @Test
   void unexpectedExceptionHidesInternalDetails() throws Exception {
     mvc.perform(get("/probe/boom"))
         .andExpect(status().isInternalServerError())
@@ -232,6 +254,16 @@ class GlobalExceptionHandlerTest {
     @GetMapping("/domain")
     ApiResponse<Void> domain() {
       throw new ProbeException();
+    }
+
+    @GetMapping("/denied")
+    ApiResponse<Void> denied() {
+      throw new AccessDeniedException("secret reason");
+    }
+
+    @GetMapping("/unauthenticated")
+    ApiResponse<Void> unauthenticated() {
+      throw new BadCredentialsException("secret reason");
     }
 
     @GetMapping("/boom")

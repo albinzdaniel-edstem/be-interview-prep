@@ -21,5 +21,13 @@ spring:
       write-dates-as-timestamps: false
 
 app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+      issuer: app
+      ttl: 15m
+    admin:
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
   links:
     base-url: ${SHORT_LINK_BASE_URL:http://localhost:8080}

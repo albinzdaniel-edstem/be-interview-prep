@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -25,12 +27,14 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest({LinkController.class, RedirectController.class})
 @Import(GlobalExceptionHandler.class)
 class LinkControllerTest {
@@ -143,6 +147,37 @@ class LinkControllerTest {
         .andExpect(header().string("Location", "https://example.com/page?x=1"))
         .andExpect(header().string("Cache-Control", "no-store"))
         .andExpect(content().string(""));
+  }
+
+  @Test
+  void headSendsTheSameRedirectWithoutCountingAVisit() throws Exception {
+    when(linkService.resolve("abc12345")).thenReturn("https://example.com/page");
+
+    mvc.perform(head("/s/abc12345"))
+        .andExpect(status().isFound())
+        .andExpect(header().string("Location", "https://example.com/page"))
+        .andExpect(header().string("Cache-Control", "no-store"));
+
+    verify(linkService, never()).visit(any());
+  }
+
+  @Test
+  void headReturns404ForAnUnknownCodeAnd410ForAnExpiredOne() throws Exception {
+    when(linkService.resolve("nope")).thenThrow(new LinkNotFoundException("nope"));
+    when(linkService.resolve("old12345")).thenThrow(new LinkExpiredException("old12345"));
+
+    mvc.perform(head("/s/nope")).andExpect(status().isNotFound());
+    mvc.perform(head("/s/old12345")).andExpect(status().isGone());
+  }
+
+  @Test
+  void getStillCountsTheVisit() throws Exception {
+    when(linkService.visit("abc12345")).thenReturn("https://example.com/page");
+
+    mvc.perform(get("/s/abc12345")).andExpect(status().isFound());
+
+    verify(linkService).visit("abc12345");
+    verify(linkService, never()).resolve(any());
   }
 
   @Test

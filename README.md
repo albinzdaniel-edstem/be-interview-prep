@@ -12,14 +12,17 @@ A Spring Boot backend, built one feature at a time. Each feature has its own pul
 
 ## Run the app
 
+Set a signing key for login tokens first. The app does not start without it.
+
 ```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
 cd backend
 ./mvnw spring-boot:run
 ```
 
 The app listens on `http://localhost:8080`.
 
-Settings come from environment variables. Each one has a local default.
+Settings come from environment variables. Only `JWT_SECRET` has no default.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -27,6 +30,9 @@ Settings come from environment variables. Each one has a local default.
 | `DB_USERNAME` | `sa` | database user |
 | `DB_PASSWORD` | empty | database password |
 | `SHORT_LINK_BASE_URL` | `http://localhost:8080` | public address used to build short URLs |
+| `JWT_SECRET` | none, required | key that signs login tokens, at least 32 characters |
+| `ADMIN_EMAIL` | empty | email of the first admin account (see Authentication) |
+| `ADMIN_PASSWORD` | empty | password of the first admin account, at least 8 characters |
 
 ## Run the tests
 
@@ -87,7 +93,7 @@ Error:
 
 ## Task API
 
-Base path: `/api/v1/tasks`
+Base path: `/api/v1/tasks`. Every endpoint needs a login (see Authentication).
 
 | Method | Path | What it does |
 |---|---|---|
@@ -115,22 +121,28 @@ Lists are paged. `size` defaults to 20 and is capped at 100. `sort` takes `field
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title": "Write report", "dueDate": "2030-01-31"}'
 
-curl "http://localhost:8080/api/v1/tasks?status=TODO&page=0&size=10&sort=dueDate,asc"
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/tasks?status=TODO&page=0&size=10&sort=dueDate,asc"
 ```
 
 ## URL shortener
 
+Creating a link and reading its stats need a login. Opening a short link does not.
+
 | Method | Path | What it does |
 |---|---|---|
 | POST | `/api/v1/links` | Shorten a URL. Returns 201 for a new link, or 200 with the existing link if the URL was shortened before. |
-| GET | `/s/{code}` | Redirect to the original URL (302) and count the visit. Unknown code: 404. Expired code: 410. |
+| GET | `/s/{code}` | Redirect to the original URL (302) and count the visit. Open to everyone, no login. Unknown code: 404. Expired code: 410. |
+| HEAD | `/s/{code}` | The same redirect headers, but the visit is **not** counted. Link checkers and preview bots send HEAD. |
 | GET | `/api/v1/links/{code}/stats` | Original URL, visit count, created date and expiry. Unknown code: 404. |
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/links \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/some/long/path", "expiresAt": "2030-01-01T00:00:00Z"}'
 ```
@@ -154,13 +166,70 @@ How it behaves, and why:
   would skip the service on later visits, so those visits would not be counted.
 - **The visit path is `/s/{code}`**, outside `/api/v1`, so that the short URL stays short.
 
+## Authentication
+
+| Method | Path | Who | What it does |
+|---|---|---|---|
+| POST | `/api/v1/auth/register` | everyone | Create an account with the `USER` role. Returns 201. |
+| POST | `/api/v1/auth/login` | everyone | Returns a bearer token that is valid for 15 minutes. |
+| GET | `/api/v1/users/me` | any logged-in user | The caller's own profile. |
+| GET | `/api/v1/users` | `ADMIN` only | All users, paged. |
+
+```bash
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ann@example.com", "password": "a long password"}'
+
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ann@example.com", "password": "a long password"}' \
+  | sed 's/.*"accessToken":"\([^"]*\)".*/\1/')
+
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/users/me
+```
+
+Everything except register, login and opening a short link needs the `Authorization: Bearer` header.
+
+| Situation | Status | `error.code` |
+|---|---|---|
+| No token, a broken token or a wrong signature | 401 | `UNAUTHENTICATED` |
+| Token older than 15 minutes | 401 | `TOKEN_EXPIRED` |
+| Wrong email or password | 401 | `INVALID_CREDENTIALS` |
+| Logged in, but the role is not allowed | 403 | `ACCESS_DENIED` |
+| Email already registered | 409 | `EMAIL_ALREADY_REGISTERED` |
+
+All of these use the standard JSON error format, never an HTML page.
+
+How it works, and why:
+
+- **No server session.** The login token is a signed JWT (JSON Web Token). The server keeps no state
+  between requests, so web and mobile clients can use it and any number of app copies can serve it.
+  The token holds only the user id, the role and the times. It is signed with HS256 using
+  `JWT_SECRET`. Spring's resource server checks the signature, the issuer and the expiry.
+- **Exactly 15 minutes.** Spring allows 60 seconds of clock skew by default. It is set to zero, so a
+  token stops working 15 minutes after it was issued.
+- **Open endpoints ignore the token header.** Register, login and opening a short link skip the token
+  check. A client that still sends its old, expired token can log in again. A broken token on any
+  other endpoint still gives 401.
+- **Passwords** are hashed with BCrypt and never returned or logged. BCrypt reads only the first 72
+  bytes, so longer passwords are rejected instead of being cut short without notice.
+- **Same answer for a wrong email and a wrong password.** The password is checked in both cases, so
+  the response does not reveal whether an email has an account. Registering a taken email does
+  return 409, which does reveal it. That is a deliberate trade-off for a clear sign-up error.
+- **Roles.** Registration always creates a `USER`. Extra fields in the request, such as `role`, are
+  ignored. The first admin is created at startup from `ADMIN_EMAIL` and `ADMIN_PASSWORD`. If they are
+  not both set, no admin exists. If the account already exists, nothing changes.
+- **No secrets in the source.** The signing key and the admin password come from the environment.
+  The app refuses to start without a signing key of at least 32 characters. Tests use a random key.
+- **Who the caller is** comes only from the token, never from the request body or path.
+
 ## Features
 
 | # | Feature | PR |
 |---|---------|----|
 | 1 | Task API | [#8](../../pull/8) |
 | 2 | URL shortener | [#9](../../pull/9) |
-| 3 | Authentication and roles | |
+| 3 | Authentication and roles | [#10](../../pull/10) |
 | 4 | Product catalog | |
 | 5 | Order service | |
 
