@@ -225,7 +225,7 @@ How it works, and why:
 |---|---------|----|
 | 1 | Task API | [#8](../../pull/8) |
 | 2 | URL shortener | [#9](../../pull/9) |
-| 3 | Authentication and roles | |
+| 3 | Authentication and roles | [#10](../../pull/10) |
 | 4 | Product catalog | |
 | 5 | Order service | |
 
