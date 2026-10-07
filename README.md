@@ -352,7 +352,7 @@ How it works, and why:
 | 2 | URL shortener | [#9](../../pull/9) |
 | 3 | Authentication and roles | [#10](../../pull/10) |
 | 4 | Product catalog | [#11](../../pull/11) |
-| 5 | Order service | |
+| 5 | Order service | [#12](../../pull/12) |
 
 ## Not included
 
