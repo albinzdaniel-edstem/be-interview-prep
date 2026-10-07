@@ -159,7 +159,7 @@ How it behaves, and why:
 | # | Feature | PR |
 |---|---------|----|
 | 1 | Task API | [#8](../../pull/8) |
-| 2 | URL shortener | |
+| 2 | URL shortener | [#9](../../pull/9) |
 | 3 | Authentication and roles | |
 | 4 | Product catalog | |
 | 5 | Order service | |
