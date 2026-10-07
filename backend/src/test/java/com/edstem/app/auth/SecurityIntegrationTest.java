@@ -53,7 +53,12 @@ class SecurityIntegrationTest {
   @Test
   void requestWithoutLoginGets401AsJsonOnEveryProtectedEndpoint() throws Exception {
     List<String> protectedPaths =
-        List.of("/api/v1/tasks", "/api/v1/links/abc/stats", "/api/v1/users/me", "/api/v1/users");
+        List.of(
+            "/api/v1/tasks",
+            "/api/v1/links/abc/stats",
+            "/api/v1/products",
+            "/api/v1/users/me",
+            "/api/v1/users");
 
     for (String path : protectedPaths) {
       mvc.perform(get(path))

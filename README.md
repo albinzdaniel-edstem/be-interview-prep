@@ -8,6 +8,7 @@ A Spring Boot backend, built one feature at a time. Each feature has its own pul
 - Maven (the wrapper is included, so Maven does not need to be installed)
 - H2 in-memory database for local runs and tests
 - Liquibase for every database change
+- Caffeine for the in-memory product cache
 - Lombok
 
 ## Run the app
@@ -165,6 +166,69 @@ How it behaves, and why:
 - **The redirect is a 302, not a 301**, with `Cache-Control: no-store`. A browser caches a 301 and
   would skip the service on later visits, so those visits would not be counted.
 - **The visit path is `/s/{code}`**, outside `/api/v1`, so that the short URL stays short.
+
+## Product catalog
+
+Every endpoint needs a login (see Authentication). 100 sample products are added at startup when the
+`products` table is empty. Set `app.catalog.seed.enabled=false` to turn that off.
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/v1/products` | Create a product. Returns 201. |
+| GET | `/api/v1/products` | List products with paging, sorting and filters. |
+| GET | `/api/v1/products/{id}` | Get one product. Returns 404 if it does not exist. |
+| PUT | `/api/v1/products/{id}` | Replace a product. Returns 404 if it does not exist. |
+| DELETE | `/api/v1/products/{id}` | Delete a product. Returns 204 with no content, or 404. |
+
+A product has a `name` (up to 200 characters), a `category` (up to 50), a `priceCents`, a `stock`, a
+`rating` from 0 to 5 and a `createdAt`. **The price is a whole number of cents** (`2500` is 25.00),
+so there are no rounding errors. Stock and price cannot be negative. The database enforces this too.
+
+List parameters. All of them are optional and can be combined in one request:
+
+| Parameter | Meaning |
+|---|---|
+| `category` | Exact category, ignoring upper and lower case. |
+| `minPriceCents`, `maxPriceCents` | Price range. Both ends are included. A minimum above the maximum returns 400. |
+| `inStock=true` | Only products with stock above 0. `false` or no value means no restriction. |
+| `q` | Text that the name must contain, ignoring case. `%` and `_` match themselves. |
+| `page`, `size` | Page number from 0, and page size. `size` defaults to 20 and is capped at 100. |
+| `sort` | `field,direction`, for example `sort=priceCents,asc`. Fields: `name`, `category`, `priceCents`, `stock`, `rating`, `createdAt`. Default is `createdAt,desc`. |
+
+The response has `content`, `page`, `size`, `totalElements` and `totalPages`.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8080/api/v1/products?category=home&inStock=true&minPriceCents=1000&maxPriceCents=30000&q=lamp&sort=rating,desc&size=10"
+```
+
+How it behaves, and why:
+
+- **Filters** are separate small conditions joined with AND in one query (JPA `Specification`). Any
+  combination works, and the total count is for the filtered result.
+- **Stable paging.** Many products share a rating or category. The service adds `id` as the last sort
+  key, so ties are always ordered the same way and no product repeats or goes missing between pages.
+- **Single-product lookups are cached** (`GET /api/v1/products/{id}`). The first lookup reads the
+  database. Later lookups of the same product are answered from memory. The cache holds at most
+  1000 products, and an entry also expires after 10 minutes.
+- **No stale data.** Update and delete remove the cached product **after the database commit**. If it
+  were removed before, a reader could load the old row and put it back. When two things happen at the
+  same moment, Caffeine finishes a load that is already running before it removes the entry.
+- **How to see the cache work.** Start the app with SQL logging and open one product twice:
+
+  ```bash
+  cd backend && ./mvnw spring-boot:run -Dspring-boot.run.arguments=--logging.level.org.hibernate.SQL=DEBUG
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/products/<id>   # one select in the log
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/v1/products/<id>   # no select
+  ```
+
+  The tests count the statements in the same way. `ProductCacheTest` shows 20 lookups run one
+  statement, and a lookup after an update or delete runs one more and returns the new data.
+- **One app copy only.** The cache lives in the memory of one app. With several copies, an update on
+  one copy does not clear the other copies until their entries expire (10 minutes at most). A shared
+  cache such as Redis would fix this. It is not part of this feature.
+- **Name search** uses `LIKE '%text%'`, which cannot use a normal index. It is fine for thousands of
+  products. For millions, a PostgreSQL trigram or full-text index would be needed.
 
 ## Authentication
 
