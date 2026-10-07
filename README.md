@@ -2,6 +2,18 @@
 
 A Spring Boot backend, built one feature at a time. Each feature has its own pull request.
 
+## Requirements
+
+Install these first:
+
+- **Java 21** (a JDK). Check with `java -version`.
+- **Docker**, running. It is needed only for the tests (see "Run the tests"). The app itself does not need it.
+- Nothing else. Maven is included through the wrapper (`mvnw`), and the app uses an in-memory database.
+
+The commands below use a Unix shell (macOS, Linux, or Git Bash on Windows). Windows PowerShell
+versions are shown where they differ. In PowerShell, run the wrapper as `.\mvnw`, and use `curl.exe`
+instead of `curl`.
+
 ## Stack
 
 - Java 21 and Spring Boot 3.5
@@ -15,7 +27,10 @@ A Spring Boot backend, built one feature at a time. Each feature has its own pul
 
 ## Run the app
 
-Set a signing key for login tokens first. The app does not start without it.
+Set a signing key for login tokens first. The app does not start without it. The key can be any
+random text of at least 32 characters. Make a new one for each machine, and never commit it.
+
+Unix shell:
 
 ```bash
 export JWT_SECRET="$(openssl rand -base64 48)"
@@ -23,7 +38,17 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
-The app listens on `http://localhost:8080`.
+Windows PowerShell:
+
+```powershell
+$env:JWT_SECRET = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+cd backend
+.\mvnw spring-boot:run
+```
+
+The app listens on `http://localhost:8080`. It is ready when the log says `Started Application`.
+The data is kept in memory, so it is gone when the app stops, and 100 sample products are added at
+every start.
 
 Settings come from environment variables. Only `JWT_SECRET` has no default.
 
@@ -37,6 +62,41 @@ Settings come from environment variables. Only `JWT_SECRET` has no default.
 | `ADMIN_EMAIL` | empty | email of the first admin account (see Authentication) |
 | `ADMIN_PASSWORD` | empty | password of the first admin account, at least 8 characters |
 
+## Try it
+
+With the app running, open a second terminal. Each step uses the answer of the one before.
+
+```bash
+# 1. Create an account
+curl -X POST http://localhost:8080/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ann@example.com", "password": "a long password"}'
+
+# 2. Log in and keep the token (it works for 15 minutes)
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "ann@example.com", "password": "a long password"}' \
+  | sed 's/.*"accessToken":"\([^"]*\)".*/\1/')
+
+# 3. Take the first of the 100 sample products
+PRODUCT_ID=$(curl -s -H "Authorization: Bearer $TOKEN" "http://localhost:8080/api/v1/products?size=1" \
+  | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+# 4. Place an order, then send the very same request again
+KEY="order-$(date +%s)"   # any text works, but use a new one for each new order
+for attempt in 1 2; do
+  curl -s -X POST http://localhost:8080/api/v1/orders \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Idempotency-Key: $KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"items\": [{\"productId\": \"$PRODUCT_ID\", \"quantity\": 1}]}" \
+    -w "\nHTTP %{http_code}\n"
+done
+```
+
+The first order answers `201`. The second answers `200` with the same order id, because it is a
+retry. Check `GET /api/v1/products/$PRODUCT_ID`: the stock went down by 1, not by 2.
+
 ## Run the tests
 
 ```bash
@@ -44,8 +104,17 @@ cd backend
 ./mvnw test
 ```
 
+Windows PowerShell: `cd backend` and then `.\mvnw test`.
+
+It takes a few minutes. Every test must pass. To run one test class, for example the order tests:
+
+```bash
+./mvnw test -Dtest=OrderApiTest
+```
+
 **Docker must be running.** The order tests start a real PostgreSQL database in a container
-(`postgres:15-alpine`) and create the schema with the real Liquibase changesets. All other tests use H2.
+(`postgres:15-alpine`) and create the schema with the real Liquibase changesets. The first run
+downloads that image, so it needs a network once. All other tests use H2 and need no Docker.
 
 Format the code before you commit:
 
@@ -353,6 +422,8 @@ How it works, and why:
 | 3 | Authentication and roles | [#10](../../pull/10) |
 | 4 | Product catalog | [#11](../../pull/11) |
 | 5 | Order service | [#12](../../pull/12) |
+
+Video: _add the YouTube link here_
 
 ## Not included
 
