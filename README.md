@@ -84,6 +84,42 @@ Error:
 - `fieldErrors` appears only when one or more fields are invalid.
 - Unexpected errors return `INTERNAL_ERROR` with a generic message. Details go to the log only.
 
+## Task API
+
+Base path: `/api/v1/tasks`
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/v1/tasks` | Create a task. Returns 201. |
+| GET | `/api/v1/tasks` | List tasks, newest first. Optional `status`, `page`, `size`, `sort`. |
+| GET | `/api/v1/tasks/{id}` | Get one task. Returns 404 if it does not exist. |
+| PUT | `/api/v1/tasks/{id}` | Replace a task. Returns 404 if it does not exist. |
+| DELETE | `/api/v1/tasks/{id}` | Delete a task. Returns 404 if it does not exist. |
+
+Task fields:
+
+| Field | Rule |
+|---|---|
+| `title` | required, at most 100 characters |
+| `description` | optional, at most 1000 characters |
+| `status` | `TODO`, `IN_PROGRESS` or `DONE`. Defaults to `TODO` on create, required on update |
+| `dueDate` | optional, `yyyy-MM-dd`, must not be in the past (today is allowed) |
+| `createdAt` | set by the server |
+
+Because a past due date is always rejected, an overdue task can only be updated if its due date
+is moved to today or later.
+
+Lists are paged. `size` defaults to 20 and is capped at 100. `sort` takes `field,direction`, for example
+`sort=title,asc`.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Write report", "dueDate": "2030-01-31"}'
+
+curl "http://localhost:8080/api/v1/tasks?status=TODO&page=0&size=10&sort=dueDate,asc"
+```
+
 ## Features
 
 | # | Feature | PR |
