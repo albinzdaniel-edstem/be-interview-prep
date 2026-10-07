@@ -39,14 +39,13 @@ import org.springframework.web.bind.annotation.RestController;
 })
 class GlobalExceptionHandlerTest {
 
-  @Autowired private MockMvc mockMvc;
+  @Autowired private MockMvc mvc;
 
   @Test
   void invalidBodyReturnsFieldErrors() throws Exception {
     String body = "{\"name\":\"\",\"count\":0}";
 
-    mockMvc
-        .perform(post("/probe/body").contentType(MediaType.APPLICATION_JSON).content(body))
+    mvc.perform(post("/probe/body").contentType(MediaType.APPLICATION_JSON).content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.message").value("Validation failed"))
@@ -61,8 +60,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void malformedBodyReturnsMalformedRequest() throws Exception {
-    mockMvc
-        .perform(post("/probe/body").contentType(MediaType.APPLICATION_JSON).content("{not json"))
+    mvc.perform(post("/probe/body").contentType(MediaType.APPLICATION_JSON).content("{not json"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"))
@@ -71,8 +69,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void wrongParameterTypeReturnsInvalidParameter() throws Exception {
-    mockMvc
-        .perform(get("/probe/number").param("value", "abc"))
+    mvc.perform(get("/probe/number").param("value", "abc"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error.code").value("INVALID_PARAMETER"))
         .andExpect(jsonPath("$.message").value(containsString("'value'")));
@@ -80,8 +77,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void parameterConstraintOnPlainControllerReturnsFieldError() throws Exception {
-    mockMvc
-        .perform(get("/probe/min").param("value", "0"))
+    mvc.perform(get("/probe/min").param("value", "0"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
         .andExpect(jsonPath("$.error.fieldErrors", hasSize(1)))
@@ -90,8 +86,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void parameterConstraintOnValidatedControllerReturnsFieldError() throws Exception {
-    mockMvc
-        .perform(get("/validated/min").param("value", "0"))
+    mvc.perform(get("/validated/min").param("value", "0"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
         .andExpect(jsonPath("$.error.fieldErrors", hasSize(1)))
@@ -100,8 +95,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void unknownRouteReturnsNotFound() throws Exception {
-    mockMvc
-        .perform(get("/does-not-exist"))
+    mvc.perform(get("/does-not-exist"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"))
@@ -110,8 +104,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void wrongMethodReturnsMethodNotAllowed() throws Exception {
-    mockMvc
-        .perform(get("/probe/body"))
+    mvc.perform(get("/probe/body"))
         .andExpect(status().isMethodNotAllowed())
         .andExpect(jsonPath("$.error.code").value("METHOD_NOT_ALLOWED"))
         .andExpect(jsonPath("$.error.status").value(405));
@@ -119,8 +112,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void wrongContentTypeReturnsUnsupportedMediaType() throws Exception {
-    mockMvc
-        .perform(post("/probe/body").contentType(MediaType.TEXT_PLAIN).content("text"))
+    mvc.perform(post("/probe/body").contentType(MediaType.TEXT_PLAIN).content("text"))
         .andExpect(status().isUnsupportedMediaType())
         .andExpect(jsonPath("$.error.code").value("UNSUPPORTED_MEDIA_TYPE"))
         .andExpect(jsonPath("$.error.status").value(415));
@@ -128,8 +120,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void domainExceptionUsesItsOwnCodeAndStatus() throws Exception {
-    mockMvc
-        .perform(get("/probe/domain"))
+    mvc.perform(get("/probe/domain"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.message").value("Probe is in conflict"))
@@ -140,8 +131,7 @@ class GlobalExceptionHandlerTest {
 
   @Test
   void unexpectedExceptionHidesInternalDetails() throws Exception {
-    mockMvc
-        .perform(get("/probe/boom"))
+    mvc.perform(get("/probe/boom"))
         .andExpect(status().isInternalServerError())
         .andExpect(jsonPath("$.success").value(false))
         .andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"))
